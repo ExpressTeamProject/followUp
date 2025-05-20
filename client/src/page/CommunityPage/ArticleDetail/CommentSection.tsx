@@ -1,0 +1,274 @@
+import type React from 'react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { ThumbsUp, MessageSquare, Flag, CornerDownRight } from 'lucide-react';
+import { MarkdownEditor } from '@/components/markdown-editor';
+import { MarkdownViewer } from '@/components/markdown-viewer';
+import { Comment } from '@/models/Comment';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  createCommentOnArticle,
+  createReplyOnComment,
+  getCommentsByArticleId,
+  toggleLikeComment,
+} from '@/lib/api/comments';
+import { API_PATHS } from '@/lib/api/api-paths';
+import { LoadingBox } from '@/components/loading-box';
+import useAuthStore from '@/store/useAuthStore';
+import { queryClient } from '@/lib/tanstack-query/query-client';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+interface Props {
+  articleId: string;
+}
+
+export function ArticleCommentSection({ articleId }: Props) {
+  const { user } = useAuthStore();
+  const { data: commentData, isLoading } = useQuery({
+    queryKey: [API_PATHS.COMMENTS.BY_ARTICLE, articleId],
+    queryFn: () => getCommentsByArticleId(articleId),
+  });
+
+  const { mutate: createComment } = useMutation({
+    mutationFn: ({ articleId, content }: { articleId: string; content: string }) =>
+      createCommentOnArticle(articleId, content),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [API_PATHS.COMMENTS.BY_ARTICLE, articleId] });
+    },
+  });
+  const { mutate: createReply } = useMutation({
+    mutationFn: ({ parentId, content }: { parentId: string; content: string }) =>
+      createReplyOnComment(parentId, content),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [API_PATHS.COMMENTS.BY_ARTICLE, articleId] });
+    },
+  });
+  const { mutate: toggleLike } = useMutation({
+    mutationFn: toggleLikeComment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [API_PATHS.COMMENTS.BY_ARTICLE, articleId] });
+    },
+  });
+
+  const [newComment, setNewComment] = useState('');
+  const [replyingTo, setReplyingTo] = useState<Comment['id'] | null>(null);
+  const [replyContent, setReplyContent] = useState('');
+
+  // if (!isSuccess) return <div>Loading...</div>;
+
+  const handleSubmitComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
+    const newCommentParams = {
+      articleId,
+      content: newComment,
+    };
+    setNewComment('');
+    createComment(newCommentParams);
+  };
+
+  const handleSubmitReply = () => {
+    if (!replyContent.trim()) return;
+    if (replyingTo == null) return;
+
+    const newReply = {
+      parentId: replyingTo,
+      content: replyContent,
+    };
+
+    createReply(newReply);
+    setReplyContent('');
+    setReplyingTo(null);
+  };
+
+  const handleToggleLike = (commentId: string) => {
+    if (!user) {
+      toast.warning('로그인 후 이용해주세요.');
+      return;
+    }
+    toggleLike(commentId);
+  };
+
+  if (isLoading) return <LoadingBox />;
+  if (!commentData) return null;
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        {commentData.data.map(comment => {
+          if (!comment || !comment.author) return null;
+
+          return (
+            <div key={comment.id} className="space-y-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex gap-4">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage
+                        src={comment.author.profileImage ?? '/placeholder.svg'}
+                        alt={comment.author.username}
+                      />
+                      <AvatarFallback>{comment.author.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{comment.author.username}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(comment.createdAt).toLocaleDateString('ko-KR')}
+                        </span>
+                      </div>
+                      <MarkdownViewer content={comment.content} className="text-sm" />
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="px-4 py-2 border-t flex justify-between">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        'flex items-center gap-1',
+                        comment.likes.some(like => like === user?.id) && 'text-teal-500',
+                      )}
+                      onClick={() => handleToggleLike(comment.id)}
+                    >
+                      <ThumbsUp className="h-4 w-4" />
+                      <span>{comment.likes.length}</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex items-center gap-1"
+                      onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      <span>답글</span>
+                    </Button>
+                  </div>
+                  <Button variant="ghost" size="sm" className="flex items-center gap-1">
+                    <Flag className="h-4 w-4" />
+                    <span>신고</span>
+                  </Button>
+                </CardFooter>
+              </Card>
+
+              {/* 대댓글 목록 */}
+              {comment.replies && comment.replies.length > 0 && (
+                <div className="ml-12 space-y-3">
+                  {comment.replies.map(reply => (
+                    <Card key={reply.id}>
+                      <CardContent className="p-4">
+                        <div className="flex gap-4">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage
+                              src={reply.author.profileImage || '/placeholder.svg'}
+                              alt={reply.author.username}
+                            />
+                            <AvatarFallback>{reply.author.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium">{reply.author.username}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(reply.createdAt).toLocaleDateString('ko-KR')}
+                              </span>
+                            </div>
+                            <MarkdownViewer content={reply.content} className="text-sm" />
+                          </div>
+                        </div>
+                      </CardContent>
+                      <CardFooter className="px-4 py-2 border-t flex justify-between">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={cn(
+                            'flex items-center gap-1',
+                            reply.likes.some(like => like === user?.id) && 'text-teal-500',
+                          )}
+                          onClick={() => handleToggleLike(reply.id)}
+                        >
+                          <ThumbsUp className="h-4 w-4" />
+                          <span>{reply.likes.length}</span>
+                        </Button>
+                        <Button variant="ghost" size="sm" className="flex items-center gap-1">
+                          <Flag className="h-4 w-4" />
+                          <span>신고</span>
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {user && replyingTo === comment.id && (
+                <div className="ml-12 mt-2">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CornerDownRight className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{comment.author.username}님에게 답글 작성</span>
+                      </div>
+                      <MarkdownEditor
+                        value={replyContent}
+                        onChange={setReplyContent}
+                        placeholder="답글을 작성해주세요..."
+                        height={150}
+                        preview="edit"
+                      />
+                      <div className="flex justify-end gap-2 mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setReplyingTo(null);
+                            setReplyContent('');
+                          }}
+                        >
+                          취소
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleSubmitReply}
+                          disabled={!replyContent.trim()}
+                          className="bg-teal-500 hover:bg-teal-600 transition-colors"
+                        >
+                          답글 등록
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {user && (
+        <form onSubmit={handleSubmitComment} className="mt-6">
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">답변 작성</h3>
+            <MarkdownEditor
+              value={newComment}
+              onChange={setNewComment}
+              placeholder="답변을 작성해주세요..."
+              height={200}
+            />
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                disabled={!newComment.trim()}
+                className="bg-teal-500 hover:bg-teal-600 transition-colors"
+              >
+                답변 등록
+              </Button>
+            </div>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
