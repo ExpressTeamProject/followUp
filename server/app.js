@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const allowedOrigins = [
-  'https://localhost:5173',
+  'http://localhost:5173',
 ];
 
 const corsOptions = {
@@ -75,7 +75,7 @@ app.get('/server-status', (req, res) => {
         <p>다음 API 엔드포인트를 테스트해 볼 수 있습니다:</p>
         <ul>
           <li><a href="/status" target="_blank">/status</a> - 서버 상태 JSON</li>
-          <li><a href="/auth" target="_blank">/auth</a> - 인증 API</li>
+          <li><a href="/api-docs" target="_blank">/api-docs</a> - API 엔드포인트</li>
         </ul>
       </div>
     </body>

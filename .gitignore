@@ -68,3 +68,4 @@ uploads/*
 
 # 설정파일
 .env
+real_env.txt

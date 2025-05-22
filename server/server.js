@@ -9,7 +9,7 @@ dotenv.config();
 const PORT = process.env.PORT || 5000;
 
 // MongoDB 비활성화 설정
-const DISABLE_MONGODB = process.env.DISABLE_MONGO;
+const DISABLE_MONGODB = process.env.DISABLE_MONGO?.toLowerCase() === 'true';
 
 // 서버 시작 함수
 const startServer = () => {
