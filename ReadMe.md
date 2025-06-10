@@ -95,4 +95,11 @@ Deploy : Vercel (프론트), Heroku or Render (백엔드)
 - 랭킹 페이지 구현
 - 비밀번호 찾기 구현
 - 실시간 알림 기능 구현
-- 사용자 페이지 평판 구현현
+- 사용자 페이지 평판 구현
+
+
+배포용 서버는
+https://github.com/ExpressTeamProject/Distribute
+에서 확인 가능합니다.
+
+RENDER (https://render.com/)을 통한 배포에 최적화 되어있습니다.
